@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ResumeValues } from "@/lib/schema";
+import { ARRAY_LIMITS } from "@/lib/resume-defaults";
 
 type CampusExperienceFormProps = {
   control: Control<ResumeValues>;
@@ -27,6 +28,7 @@ export function CampusExperienceForm({ control }: CampusExperienceFormProps) {
     control,
     name: "campusExperience",
   });
+  const atLimit = fields.length >= ARRAY_LIMITS.campusExperience;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
@@ -40,6 +42,7 @@ export function CampusExperienceForm({ control }: CampusExperienceFormProps) {
         <Button
           type="button"
           variant="outline"
+          disabled={atLimit}
           onClick={() =>
             append({
               organization: "",
@@ -50,7 +53,9 @@ export function CampusExperienceForm({ control }: CampusExperienceFormProps) {
             })
           }
         >
-          新增校园经历
+          {atLimit
+            ? `已达上限（${ARRAY_LIMITS.campusExperience} 条）`
+            : "新增校园经历"}
         </Button>
       </div>
 
@@ -66,6 +71,7 @@ export function CampusExperienceForm({ control }: CampusExperienceFormProps) {
                 variant="ghost"
                 disabled={fields.length <= 1}
                 onClick={() => remove(index)}
+                aria-label={`删除第 ${index + 1} 条`}
               >
                 删除
               </Button>

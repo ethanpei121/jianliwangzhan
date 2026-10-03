@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 
 import { type OptimizeSection, isOptimizeSection } from "@/lib/schema";
 
@@ -60,6 +61,13 @@ const sectionPrompts: Record<OptimizeSection, string> = {
 };
 
 export async function POST(request: NextRequest) {
+  // 鉴权必须放在最前面：这是一个会产生真实调用费用的付费接口，
+  // 任何未登录的裸请求都能触发上游消耗。
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
   const apiKey = process.env.ALIYUN_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ResumeValues } from "@/lib/schema";
+import { ARRAY_LIMITS } from "@/lib/resume-defaults";
 
 type EducationFormProps = {
   control: Control<ResumeValues>;
@@ -27,6 +28,7 @@ export function EducationForm({ control }: EducationFormProps) {
     control,
     name: "education",
   });
+  const atLimit = fields.length >= ARRAY_LIMITS.education;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
@@ -40,6 +42,7 @@ export function EducationForm({ control }: EducationFormProps) {
         <Button
           type="button"
           variant="outline"
+          disabled={atLimit}
           onClick={() =>
             append({
               school: "",
@@ -53,7 +56,9 @@ export function EducationForm({ control }: EducationFormProps) {
             })
           }
         >
-          新增教育背景
+          {atLimit
+            ? `已达上限（${ARRAY_LIMITS.education} 条）`
+            : "新增教育背景"}
         </Button>
       </div>
 
@@ -69,6 +74,7 @@ export function EducationForm({ control }: EducationFormProps) {
                 variant="ghost"
                 disabled={fields.length <= 1}
                 onClick={() => remove(index)}
+                aria-label={`删除第 ${index + 1} 条`}
               >
                 删除
               </Button>

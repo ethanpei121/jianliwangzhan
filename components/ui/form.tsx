@@ -107,17 +107,19 @@ const FormControl = React.forwardRef<
   React.ElementRef<typeof Slot>,
   React.ComponentPropsWithoutRef<typeof Slot>
 >(({ ...props }, ref) => {
-  const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
+  const { error, formItemId, formMessageId } = useFormField()
+
+  // FormDescription 在本项目从未被渲染。若无条件输出 formDescriptionId，
+  // 全部 71 个字段的 aria-describedby 都会指向一个不存在的 id（ARIA 悬空引用），
+  // 读屏会尝试播报空描述。只有 FormMessage 确实存在（有 error 时才渲染），
+  // 因此这里仅在出错时关联它，无错时干脆省略该属性。
+  const describedBy = error ? formMessageId : undefined
 
   return (
     <Slot
       ref={ref}
       id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}`
-          : `${formDescriptionId} ${formMessageId}`
-      }
+      aria-describedby={describedBy}
       aria-invalid={!!error}
       {...props}
     />

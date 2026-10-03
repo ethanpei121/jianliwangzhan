@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ResumeValues } from "@/lib/schema";
+import { ARRAY_LIMITS } from "@/lib/resume-defaults";
 
 type WorkExperienceFormProps = {
   control: Control<ResumeValues>;
@@ -27,6 +28,7 @@ export function WorkExperienceForm({ control }: WorkExperienceFormProps) {
     control,
     name: "workExperience",
   });
+  const atLimit = fields.length >= ARRAY_LIMITS.workExperience;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
@@ -40,6 +42,7 @@ export function WorkExperienceForm({ control }: WorkExperienceFormProps) {
         <Button
           type="button"
           variant="outline"
+          disabled={atLimit}
           onClick={() =>
             append({
               company: "",
@@ -52,7 +55,9 @@ export function WorkExperienceForm({ control }: WorkExperienceFormProps) {
             })
           }
         >
-          新增工作经历
+          {atLimit
+            ? `已达上限（${ARRAY_LIMITS.workExperience} 条）`
+            : "新增工作经历"}
         </Button>
       </div>
 
@@ -68,6 +73,7 @@ export function WorkExperienceForm({ control }: WorkExperienceFormProps) {
                 variant="ghost"
                 disabled={fields.length <= 1}
                 onClick={() => remove(index)}
+                aria-label={`删除第 ${index + 1} 条`}
               >
                 删除
               </Button>

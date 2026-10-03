@@ -2,17 +2,22 @@ import { z } from "zod";
 
 const optionalEmailField = z.union([
   z.literal(""),
-  z.string().trim().email("请输入有效邮箱地址"),
+  z
+    .string()
+    .trim()
+    .max(100, "邮箱不能超过 100 个字符")
+    .email("请输入有效邮箱地址"),
 ]);
 
 const optionalUrlField = z.union([
   z.literal(""),
-  z.string().trim().url("请输入有效链接"),
+  z.string().trim().max(300, "链接不能超过 300 个字符").url("请输入有效链接"),
 ]);
 
 const hexColorField = z
   .string()
-  .regex(/^#[0-9A-Fa-f]{6}$/, "请选择有效的十六进制颜色");
+  .trim()
+  .regex(/^#[0-9A-Fa-f]{6}$/, "颜色格式不正确，请输入如 #0f6db6 的六位色值");
 
 const personalInfoSchema = z.object({
   fullName: z.string().trim().max(100, "姓名不能超过 100 个字符"),

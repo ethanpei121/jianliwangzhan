@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
-import { mergeResumeData } from "@/lib/resume-defaults";
+import { mergeResumeData, sanitizeResumeData } from "@/lib/resume-defaults";
 import type { ResumeValues } from "@/lib/schema";
 
 export type SaveStatus =
@@ -28,7 +28,10 @@ export function useResumePersistence(form: UseFormReturn<ResumeValues>) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const save = useCallback(async () => {
-    const json = JSON.stringify(form.getValues());
+    // 落库前裁掉超量数组：界面已禁用新增按钮，但历史脏数据 / 并发标签页
+    // 仍可能绕过，这里是最后一道闸门。
+    const payload = sanitizeResumeData(form.getValues());
+    const json = JSON.stringify(payload);
     if (json === lastSavedJson.current) {
       return;
     }

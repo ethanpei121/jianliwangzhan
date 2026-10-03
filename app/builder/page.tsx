@@ -293,7 +293,12 @@ export default function BuilderPage() {
               <ExportActions data={liveData} previewRef={previewRef} />
             </div>
             <Form {...form}>
-              <form className="mt-4 pb-8 sm:mt-6">{sectionForm}</form>
+              <form
+                className="mt-4 pb-8 sm:mt-6"
+                onSubmit={(event) => event.preventDefault()}
+              >
+                {sectionForm}
+              </form>
             </Form>
           </div>
         </section>

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Control } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -19,9 +19,23 @@ type PersonalInfoFormProps = {
   control: Control<ResumeValues>;
 };
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+/** 原图上限 2MB；base64 约膨胀 1.33 倍，转换后仍在 schema 的 600 万字符以内。 */
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+const DEFAULT_SIDEBAR_COLOR = "#0f6db6";
+const DEFAULT_ACCENT_COLOR = "#0f6db6";
+
+function isHexColor(value: string) {
+  return /^#[0-9A-Fa-f]{6}$/.test(value ?? "");
+}
+
+/**
+ * 返回读取 Promise 与 abort 句柄。
+ * 组件卸载或用户改选时必须 abort，否则会对已废弃的表单实例写入。
+ */
+function readFileAsDataUrl(file: File) {
+  const reader = new FileReader();
+  const promise = new Promise<string>((resolve, reject) => {
     reader.onload = () => {
       if (typeof reader.result === "string") {
         resolve(reader.result);
@@ -30,11 +44,67 @@ function readFileAsDataUrl(file: File): Promise<string> {
       }
     };
     reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.onabort = () => reject(new Error("读取已取消"));
     reader.readAsDataURL(file);
   });
+  return { promise, abort: () => reader.abort() };
 }
 
 export function PersonalInfoForm({ control }: PersonalInfoFormProps) {
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const activeReader = useRef<{ abort: () => void } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      activeReader.current?.abort();
+    };
+  }, []);
+
+  const handleAvatarFile = async (
+    event: ChangeEvent<HTMLInputElement>,
+    onChange: (value: string) => void,
+  ) => {
+    const input = event.target;
+    const selectedFile = input.files?.[0];
+    if (!selectedFile) {
+      return;
+    }
+
+    setAvatarError(null);
+
+    // 先做体积校验：否则超大图片会先被完整读成几百万字符的 dataURL
+    // 塞进表单，再被 schema 判错，期间还会被自动保存完整写进数据库。
+    if (selectedFile.size > MAX_AVATAR_BYTES) {
+      input.value = "";
+      setAvatarError("图片不能超过 2MB，请压缩后再上传");
+      return;
+    }
+
+    const { promise, abort } = readFileAsDataUrl(selectedFile);
+    activeReader.current = { abort };
+
+    try {
+      onChange(await promise);
+    } catch {
+      input.value = "";
+      setAvatarError("图片读取失败，请换一张图片重试");
+    } finally {
+      activeReader.current = null;
+    }
+  };
+
+  const clearAvatar = (onChange: (value: string) => void) => {
+    activeReader.current?.abort();
+    activeReader.current = null;
+    onChange("");
+    setAvatarError(null);
+    // 清空原生 input 的值，否则再选同一个文件不会触发 change 事件。
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
       <h2 className="text-lg font-semibold text-gray-900">基本信息</h2>
@@ -174,7 +244,7 @@ export function PersonalInfoForm({ control }: PersonalInfoFormProps) {
           name="personalInfo.github"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Github / 作品链接（可选）</FormLabel>
+              <FormLabel>GitHub / 作品链接（可选）</FormLabel>
               <FormControl>
                 <Input placeholder="例如：https://github.com/your-name" {...field} />
               </FormControl>
@@ -192,24 +262,21 @@ export function PersonalInfoForm({ control }: PersonalInfoFormProps) {
               <FormControl>
                 <Input
                   name={field.name}
-                  ref={field.ref}
+                  ref={(element) => {
+                    fileInputRef.current = element;
+                    field.ref(element);
+                  }}
                   type="file"
                   accept="image/*"
                   onBlur={field.onBlur}
-                  onChange={async (event: ChangeEvent<HTMLInputElement>) => {
-                    const selectedFile = event.target.files?.[0];
-                    if (!selectedFile) {
-                      return;
-                    }
-                    try {
-                      const dataUrl = await readFileAsDataUrl(selectedFile);
-                      field.onChange(dataUrl);
-                    } catch {
-                      field.onChange("");
-                    }
+                  onChange={(event) => {
+                    void handleAvatarFile(event, field.onChange);
                   }}
                 />
               </FormControl>
+              {avatarError ? (
+                <p className="mt-1 text-xs text-red-600">{avatarError}</p>
+              ) : null}
               {field.value ? (
                 <div className="mt-3 flex items-center gap-4 rounded-md border border-gray-200 bg-gray-50 p-3">
                   <Image
@@ -223,7 +290,7 @@ export function PersonalInfoForm({ control }: PersonalInfoFormProps) {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => field.onChange("")}
+                    onClick={() => clearAvatar(field.onChange)}
                   >
                     移除照片
                   </Button>
@@ -240,17 +307,22 @@ export function PersonalInfoForm({ control }: PersonalInfoFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>侧栏颜色</FormLabel>
-              <FormControl>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    className="h-10 w-14 cursor-pointer p-1"
-                    value={field.value}
-                    onChange={field.onChange}
-                  />
+              <div className="flex items-center gap-3">
+                <Input
+                  type="color"
+                  className="h-10 w-14 cursor-pointer p-1"
+                  // 文本框里的值非法时（如 "red"），<input type="color"> 会静默回退成
+                  // #000000，色块与文本框对不上。回退到默认色而不是黑色。
+                  value={isHexColor(field.value) ? field.value : DEFAULT_SIDEBAR_COLOR}
+                  onChange={field.onChange}
+                  aria-label="侧栏颜色取色器"
+                />
+                {/* FormControl 必须直接包住真正的 input，否则 id / aria-invalid
+                    会落到外层 div 上，label 关联与读屏都失效。 */}
+                <FormControl>
                   <Input {...field} />
-                </div>
-              </FormControl>
+                </FormControl>
+              </div>
               <FormMessage />
             </FormItem>
           )}
@@ -262,17 +334,18 @@ export function PersonalInfoForm({ control }: PersonalInfoFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>标题强调色</FormLabel>
-              <FormControl>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    className="h-10 w-14 cursor-pointer p-1"
-                    value={field.value}
-                    onChange={field.onChange}
-                  />
+              <div className="flex items-center gap-3">
+                <Input
+                  type="color"
+                  className="h-10 w-14 cursor-pointer p-1"
+                  value={isHexColor(field.value) ? field.value : DEFAULT_ACCENT_COLOR}
+                  onChange={field.onChange}
+                  aria-label="标题强调色取色器"
+                />
+                <FormControl>
                   <Input {...field} />
-                </div>
-              </FormControl>
+                </FormControl>
+              </div>
               <FormMessage />
             </FormItem>
           )}

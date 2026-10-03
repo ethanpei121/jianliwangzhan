@@ -1,5 +1,25 @@
 import { type ResumeValues } from "@/lib/schema";
 
+/**
+ * 各数组模块的条目上限，与 schema.ts 里的 .max() 保持一致。
+ *
+ * 导出成常量是为了让「新增」按钮能读取同一个上限做禁用判断 ——
+ * 以前上限只写在 schema 里，界面完全不知道它存在，用户可以无限新增。
+ */
+export const ARRAY_LIMITS = {
+  education: 10,
+  internships: 10,
+  projects: 10,
+  workExperience: 10,
+  campusExperience: 10,
+  awards: 20,
+} as const satisfies Record<string, number>;
+
+export type ArraySectionKey = keyof typeof ARRAY_LIMITS;
+
+/** 单份简历的 JSON 体积上限（字符数），防止异常数据撑爆数据库行。 */
+export const MAX_PAYLOAD_CHARS = 8_000_000;
+
 /** 各模块的空条目模板，用于合并历史数据时补齐缺失字段。 */
 const emptyEducation: Record<string, string> = {
   school: "",
@@ -121,14 +141,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function mergeList(
   raw: unknown,
   emptyItem: Record<string, string>,
+  limit?: number,
 ): Record<string, string>[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return [{ ...emptyItem }];
   }
   // 逐条补齐字段：历史记录若缺字段，模板里 hasValue(value) 的 value.trim() 会直接崩。
-  return raw
+  const items = raw
     .filter(isRecord)
     .map((item) => ({ ...emptyItem, ...item }) as Record<string, string>);
+  // 历史上界面没有上限保护，可能已写入超量数据；读取时顺手裁掉，
+  // 否则非法条目会跨会话无限累积。
+  return typeof limit === "number" ? items.slice(0, limit) : items;
 }
 
 /**
@@ -148,22 +172,40 @@ export function mergeResumeData(raw: unknown): ResumeValues {
       ...defaultResumeValues.personalInfo,
       ...(input.personalInfo ?? {}),
     },
-    education: mergeList(input.education, emptyEducation) as ResumeValues["education"],
-    internships: mergeList(input.internships, emptyInternship) as ResumeValues["internships"],
-    projects: mergeList(input.projects, emptyProject) as ResumeValues["projects"],
+    education: mergeList(
+      input.education,
+      emptyEducation,
+      ARRAY_LIMITS.education,
+    ) as ResumeValues["education"],
+    internships: mergeList(
+      input.internships,
+      emptyInternship,
+      ARRAY_LIMITS.internships,
+    ) as ResumeValues["internships"],
+    projects: mergeList(
+      input.projects,
+      emptyProject,
+      ARRAY_LIMITS.projects,
+    ) as ResumeValues["projects"],
     workExperience: mergeList(
       input.workExperience,
       emptyWorkExperience,
+      ARRAY_LIMITS.workExperience,
     ) as ResumeValues["workExperience"],
     campusExperience: mergeList(
       input.campusExperience,
       emptyCampusExperience,
+      ARRAY_LIMITS.campusExperience,
     ) as ResumeValues["campusExperience"],
     certificates: {
       ...defaultResumeValues.certificates,
       ...(input.certificates ?? {}),
     },
-    awards: mergeList(input.awards, emptyAward) as ResumeValues["awards"],
+    awards: mergeList(
+      input.awards,
+      emptyAward,
+      ARRAY_LIMITS.awards,
+    ) as ResumeValues["awards"],
     selfEvaluation: {
       ...defaultResumeValues.selfEvaluation,
       ...(input.selfEvaluation ?? {}),
@@ -176,5 +218,24 @@ export function mergeResumeData(raw: unknown): ResumeValues {
         ...(input.optionalModules?.enabled ?? {}),
       },
     },
+  };
+}
+
+/**
+ * 落库前清洗。
+ *
+ * 刻意**不做** schema 严格校验：自动保存必须能存半成品，
+ * 否则用户邮箱打到一半（`zhang@`）整份简历就再也存不进去了。
+ * 这里只挡住真正有风险的形态 —— 数组超量。
+ */
+export function sanitizeResumeData(data: ResumeValues): ResumeValues {
+  return {
+    ...data,
+    education: data.education.slice(0, ARRAY_LIMITS.education),
+    internships: data.internships.slice(0, ARRAY_LIMITS.internships),
+    projects: data.projects.slice(0, ARRAY_LIMITS.projects),
+    workExperience: data.workExperience.slice(0, ARRAY_LIMITS.workExperience),
+    campusExperience: data.campusExperience.slice(0, ARRAY_LIMITS.campusExperience),
+    awards: data.awards.slice(0, ARRAY_LIMITS.awards),
   };
 }

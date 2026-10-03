@@ -39,6 +39,11 @@ async function copyFileIfExists(sourcePath, targetPath) {
   await cp(sourcePath, targetPath, { force: true });
 }
 
+async function copyFile(sourcePath, targetPath) {
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await cp(sourcePath, targetPath, { force: true });
+}
+
 async function writeRuntimePackageJson() {
   const rawPackageJson = await readFile(packageJsonSourcePath, "utf8");
   const sourcePackageJson = JSON.parse(rawPackageJson);
@@ -72,6 +77,16 @@ async function main() {
     throw new Error("未找到 .next/static，请先执行 `next build` 生成生产构建产物。");
   }
 
+  // .env.production 被 .gitignore 忽略，新克隆的仓库必然没有它。
+  // 以前这里是静默跳过，会打出一个缺数据库配置的包，上传到服务器才暴雷成 503。
+  // 与 static 的处理方式对齐：缺了就直接抛错。
+  const envExists = await pathExists(envSourcePath);
+  if (!envExists) {
+    throw new Error(
+      "未找到 .env.production。请先复制 .env.example 为 .env.production 并填入生产环境真实值（Clerk 密钥、MySQL 连接信息）。"
+    );
+  }
+
   const publicExists = await pathExists(publicSourceDir);
   if (publicExists) {
     await copyDirectory(publicSourceDir, publicTargetDir);
@@ -82,7 +97,7 @@ async function main() {
 
   await copyDirectory(staticSourceDir, staticTargetDir);
   await copyFileIfExists(pm2ConfigSourcePath, pm2ConfigTargetPath);
-  await copyFileIfExists(envSourcePath, envTargetPath);
+  await copyFile(envSourcePath, envTargetPath);
   await writeRuntimePackageJson();
 
   console.log(

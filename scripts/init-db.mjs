@@ -33,7 +33,13 @@ function loadEnv(file) {
   return result;
 }
 
-const env = { ...loadEnv(".env"), ...loadEnv(".env.local") };
+// 加载优先级：.env < .env.local < .env.production
+// 带上 .env.production 是为了在服务器（standalone 包）里也能直接跑建表脚本。
+const env = {
+  ...loadEnv(".env"),
+  ...loadEnv(".env.local"),
+  ...loadEnv(".env.production"),
+};
 
 const config = {
   host: env.DB_HOST || "127.0.0.1",
